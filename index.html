@@ -588,6 +588,7 @@
         let saveTimer = null;
         let saveVersion = 0;
         let pendingSave = false;
+        let localDirty = false;
         let lastSavedFingerprint = "";
 
         async function persistCurrentState() {
@@ -612,6 +613,7 @@
                     return false;
                 }
                 lastSavedFingerprint = fingerprint;
+                if (saveVersion === versionAtStart) localDirty = false;
                 window.updateSaveBadge('saved');
                 if (saveVersion !== versionAtStart) return await persistCurrentState();
                 return true;
@@ -623,6 +625,7 @@
         window.saveToStorage = function() {
             if (window.isReadOnly || !window.dbReady || !isSupabaseConfigured() || !window.boardId || !window.accessToken) return;
             saveVersion++;
+            localDirty = true;
             clearTimeout(saveTimer);
             window.updateSaveBadge('saving');
             saveTimer = setTimeout(() => { persistCurrentState(); }, 300);
@@ -634,7 +637,7 @@
             // The database is still the shared source of truth; changes appear automatically.
             if (window.collabPollTimer) clearInterval(window.collabPollTimer);
             window.collabPollTimer = setInterval(async () => {
-                if (!window.dbReady || pendingSave) return;
+                if (!window.dbReady || pendingSave || localDirty) return;
                 try {
                     const { data, error } = await supabaseClient.rpc('load_roulement_board', {
                         p_board_id: window.boardId,
@@ -658,6 +661,7 @@
                         }
                     }
                     lastSavedFingerprint = incoming;
+                    localDirty = false;
                     renderTabs(); renderLegend(); renderTable();
                     window.updateSaveBadge('saved');
                 } catch (e) { console.warn('Synchronisation:', e); }
@@ -682,6 +686,7 @@
                 }
                 window.dbReady = true;
                 lastSavedFingerprint = JSON.stringify(buildState());
+                localDirty = false;
                 await startRealtime();
             } catch (e) {
                 console.error(e);
