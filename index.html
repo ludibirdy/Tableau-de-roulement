@@ -162,37 +162,8 @@
             <div class="overflow-x-auto grow">
                 <table id="mainTable" class="w-full text-left border-collapse min-w-[950px] table-fixed">
                     <thead>
-                        <tr class="bg-slate-200 text-slate-800 text-sm font-bold border-b-2 border-slate-300 select-none">
-                            <th id="col-qui" class="p-4 border-r-2 border-slate-300 w-1/5 resizable-th">
-                                <div class="flex items-center justify-between">
-                                    <span><i class="fa-solid fa-user me-1.5 text-slate-600"></i> QUI</span>
-                                </div>
-                                <div class="col-resizer" onmousedown="initColResize(event, 'col-qui')"></div>
-                            </th>
-                            <th id="col-action" class="p-4 border-r-2 border-slate-300 w-1/4 resizable-th">
-                                <div class="flex items-center justify-between">
-                                    <span><i class="fa-solid fa-list-check me-1.5 text-sky-600"></i> FAIT QUOI AUJOURD'HUI</span>
-                                </div>
-                                <div class="col-resizer" onmousedown="initColResize(event, 'col-action')"></div>
-                            </th>
-                            <th id="col-date" class="p-4 border-r-2 border-slate-300 w-1/5 resizable-th">
-                                <div class="flex items-center justify-between">
-                                    <span><i class="fa-regular fa-clock me-1.5 text-purple-600"></i> DATE DU DERNIER TICKET</span>
-                                </div>
-                                <div class="col-resizer" onmousedown="initColResize(event, 'col-date')"></div>
-                            </th>
-                            <th id="col-remaining" class="p-4 border-r-2 border-slate-300 w-1/6 resizable-th">
-                                <div class="flex items-center justify-between">
-                                    <span><i class="fa-solid fa-ticket me-1.5 text-amber-600"></i> TICKETS RESTANTS</span>
-                                </div>
-                                <div class="col-resizer" onmousedown="initColResize(event, 'col-remaining')"></div>
-                            </th>
-                            <th id="col-comment" class="p-4 w-1/4 resizable-th">
-                                <div class="flex items-center justify-between">
-                                    <span><i class="fa-regular fa-comment-dots me-1.5 text-emerald-600"></i> COMMENTAIRE FIN DE JOURNÉE</span>
-                                </div>
-                                <div class="col-resizer" onmousedown="initColResize(event, 'col-comment')"></div>
-                            </th>
+                        <tr id="mainTableHeader" class="bg-slate-200 text-slate-800 text-sm font-bold border-b-2 border-slate-300 select-none">
+                            <!-- Headers rendered by renderColumnHeaders() -->
                         </tr>
                     </thead>
                     <tbody id="teamTableBody" class="divide-y-2 divide-slate-300 text-sm">
@@ -446,6 +417,60 @@
             slate: { bg: "bg-slate-100", text: "text-slate-900", border: "border-slate-300", accent: "#64748b" }
         };
 
+        const defaultColumnTitles = {
+            qui: "QUI",
+            action: "FAIT QUOI AUJOURD'HUI",
+            date: "DATE DU DERNIER TICKET",
+            remaining: "TICKETS RESTANTS",
+            comment: "COMMENTAIRE FIN DE JOURNÉE",
+            ludivine: "COMMENTAIRES LUDIVINE"
+        };
+
+        function getColumnTitles() {
+            return {
+                ...defaultColumnTitles,
+                ...(window.columnTitles || {})
+            };
+        }
+
+        function updateColumnTitle(key, value) {
+            const clean = (value || "").trim();
+            if (!clean) return;
+            window.columnTitles = getColumnTitles();
+            window.columnTitles[key] = clean;
+            renderTable();
+            window.saveToStorage();
+            showToast("Titre de colonne modifié.");
+        }
+
+        function editColumnTitle(key) {
+            if (window.isReadOnly) return;
+            const titles = getColumnTitles();
+            const next = prompt("Nouveau titre de la colonne :", titles[key] || "");
+            if (next !== null) {
+                updateColumnTitle(key, next);
+            }
+        }
+
+        function columnHeaderHtml(id, key, iconClass, iconColorClass, extraClass = "") {
+            const titles = getColumnTitles();
+            return `
+                <th id="${id}" class="p-4 border-r-2 border-slate-300 ${extraClass} resizable-th">
+                    <div class="flex items-center justify-between gap-2">
+                        <span><i class="${iconClass} me-1.5 ${iconColorClass}"></i> ${titles[key]}</span>
+                        ${!window.isReadOnly ? `
+                            <button onclick="event.stopPropagation(); editColumnTitle('${key}')"
+                                class="text-slate-400 hover:text-indigo-600 transition p-1 rounded-lg"
+                                title="Modifier le titre de cette colonne">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                    <div class="col-resizer" onmousedown="initColResize(event, '${id}')"></div>
+                </th>
+            `;
+        }
+
         const defaultTags = [
             { id: 1, name: "Vacances / Off", color: "#94a3b8" },
             { id: 2, name: "Ticket en cours et retour", color: "#38bdf8" },
@@ -472,13 +497,13 @@
 
         function createDefaultTeam() {
             return [
-                { id: 101, name: "Aminata", colorKey: "orange", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
-                { id: 102, name: "Cyrille", colorKey: "yellow", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
-                { id: 103, name: "Sarah", colorKey: "blue", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
-                { id: 104, name: "Ludivine", colorKey: "rose", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
-                { id: 105, name: "Cécilie", colorKey: "indigo", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
-                { id: 106, name: "Clémence F", colorKey: "cyan", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
-                { id: 107, name: "Clémence B", colorKey: "emerald", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} }
+                { id: 101, name: "Aminata", colorKey: "orange", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", commentsLudivine: "", cellBg: {} },
+                { id: 102, name: "Cyrille", colorKey: "yellow", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", commentsLudivine: "", cellBg: {} },
+                { id: 103, name: "Sarah", colorKey: "blue", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", commentsLudivine: "", cellBg: {} },
+                { id: 104, name: "Ludivine", colorKey: "rose", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", commentsLudivine: "", cellBg: {} },
+                { id: 105, name: "Cécilie", colorKey: "indigo", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", commentsLudivine: "", cellBg: {} },
+                { id: 106, name: "Clémence F", colorKey: "cyan", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", commentsLudivine: "", cellBg: {} },
+                { id: 107, name: "Clémence B", colorKey: "emerald", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", commentsLudivine: "", cellBg: {} }
             ];
         }
 
@@ -516,6 +541,7 @@
         window.dbReady = false;
 
         window.availableTags = defaultTags;
+        window.columnTitles = { ...defaultColumnTitles };
         window.boardTabs = [
             { id: 'lundi', name: 'Lundi', date: '', generalNote: '', teamData: createDefaultTeam() },
             { id: 'mardi', name: 'Mardi', date: '', generalNote: '', teamData: createDefaultTeam() },
@@ -549,7 +575,8 @@
                 availableTags: window.availableTags,
                 boardTabs: window.boardTabs,
                 activeTabId: window.activeTabId,
-                pageBgColor: window.pageBgColor
+                pageBgColor: window.pageBgColor,
+                columnTitles: getColumnTitles()
             };
         }
 
@@ -582,6 +609,13 @@
             window.boardTabs = data.boardTabs || window.boardTabs;
             window.activeTabId = data.activeTabId || 'lundi';
             window.pageBgColor = data.pageBgColor || '#f8fafc';
+            window.columnTitles = { ...defaultColumnTitles, ...(data.columnTitles || {}) };
+            // Backward compatibility: add the new column field to existing members.
+            window.boardTabs.forEach(tab => {
+                (tab.teamData || []).forEach(member => {
+                    if (typeof member.commentsLudivine !== 'string') member.commentsLudivine = '';
+                });
+            });
             return true;
         }
 
@@ -960,7 +994,21 @@
             }).join('');
         }
 
+        function renderColumnHeaders() {
+            const row = document.getElementById('mainTableHeader');
+            if (!row) return;
+            row.innerHTML = [
+                columnHeaderHtml('col-qui', 'qui', 'fa-solid fa-user', 'text-slate-600', 'w-1/5'),
+                columnHeaderHtml('col-action', 'action', 'fa-solid fa-list-check', 'text-sky-600', 'w-1/4'),
+                columnHeaderHtml('col-date', 'date', 'fa-regular fa-clock', 'text-purple-600', 'w-1/5'),
+                columnHeaderHtml('col-remaining', 'remaining', 'fa-solid fa-ticket', 'text-amber-600', 'w-1/6'),
+                columnHeaderHtml('col-comment', 'comment', 'fa-regular fa-comment-dots', 'text-emerald-600', 'w-1/4'),
+                columnHeaderHtml('col-ludivine', 'ludivine', 'fa-regular fa-comments', 'text-pink-600', 'w-1/4')
+            ].join('');
+        }
+
         function renderTable() {
+            renderColumnHeaders();
             const tbody = document.getElementById('teamTableBody');
             const activeTab = getActiveTab();
             if (!tbody || !activeTab) return;
@@ -968,6 +1016,7 @@
             const readOnlyAttr = window.isReadOnly ? 'disabled readonly' : '';
 
             tbody.innerHTML = activeTab.teamData.map((rowData) => {
+                if (typeof rowData.commentsLudivine !== 'string') rowData.commentsLudivine = '';
                 const mTheme = colorThemes[rowData.colorKey] || colorThemes.indigo;
                 const rowHeightStyle = rowData.rowHeight ? `style="height: ${rowData.rowHeight}px;"` : '';
                 const cb = rowData.cellBg || {};
@@ -1104,6 +1153,24 @@
                             </div>
                             <div class="row-resizer" onmousedown="initRowResize(event, this, ${rowData.id})"></div>` : ''}
                         </td>
+
+                        <!-- Commentaires Ludivine -->
+                        <td ${rowData.cellBg?.ludivine ? `style="background-color: ${rowData.cellBg.ludivine};"` : ''} class="p-3 md:p-4 relative group">
+                            <textarea
+                                rows="2"
+                                placeholder="${window.isReadOnly ? '' : 'Commentaires Ludivine...'}"
+                                ${readOnlyAttr}
+                                oninput="updateField(${rowData.id}, 'commentsLudivine', this.value)"
+                                class="w-full h-full text-base p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-pink-400 focus:outline-none bg-white resize-none text-slate-800"
+                            >${rowData.commentsLudivine || ''}</textarea>
+                            ${!window.isReadOnly ? `
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100">
+                                <button onclick="openCellColorModal(${rowData.id}, 'ludivine')" class="text-slate-400 hover:text-indigo-600 transition p-1 bg-white/80 rounded-md shadow-xs" title="Couleur de fond">
+                                    <i class="fa-solid fa-fill-drip text-xs"></i>
+                                </button>
+                            </div>
+                            <div class="row-resizer" onmousedown="initRowResize(event, this, ${rowData.id})"></div>` : ''}
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -1129,6 +1196,7 @@
                     lastTicketDate: "",
                     remainingTickets: "",
                     comment: "",
+                    commentsLudivine: "",
                     cellBg: {}
                 };
                 getActiveTab().teamData.push(newMember);
@@ -1438,7 +1506,7 @@
         }
 
         function resetSizes() {
-            const cols = ['col-qui', 'col-action', 'col-date', 'col-remaining', 'col-comment'];
+            const cols = ['col-qui', 'col-action', 'col-date', 'col-remaining', 'col-comment', 'col-ludivine'];
             cols.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.style.width = '';
@@ -1531,6 +1599,9 @@
                 text += `  • Tickets restants : ${member.remainingTickets || '0'}\n`;
                 if (member.comment) {
                     text += `  • Remarque : ${member.comment}\n`;
+                }
+                if (member.commentsLudivine) {
+                    text += `  • Commentaires Ludivine : ${member.commentsLudivine}\n`;
                 }
                 text += `------------------------------------\n`;
             });
