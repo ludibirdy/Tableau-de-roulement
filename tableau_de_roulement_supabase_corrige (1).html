@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau de Roulement</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Table Resize Handles */
+        th.resizable-th { position: relative; }
+        .col-resizer {
+            position: absolute;
+            right: -3px;
+            top: 0;
+            bottom: 0;
+            width: 7px;
+            cursor: col-resize;
+            user-select: none;
+            z-index: 20;
+            border-right: 2px transparent dashed;
+        }
+        .col-resizer:hover, .col-resizer.resizing {
+            border-right-color: #6366f1;
+            background-color: rgba(99, 102, 241, 0.15);
+        }
+
+        tr.resizable-tr { position: relative; }
+        .row-resizer {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -3px;
+            height: 6px;
+            cursor: row-resize;
+            user-select: none;
+            z-index: 10;
+        }
+        .row-resizer:hover, .row-resizer.resizing {
+            background-color: rgba(99, 102, 241, 0.3);
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body id="pageBody" class="h-full text-slate-800 flex flex-col min-h-screen bg-slate-50 transition-colors duration-300">
+
+    <div class="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6 grow flex flex-col">
+        
+        <!-- Header Principal -->
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 md:p-6 rounded-2xl shadow-xs border border-slate-200/80">
+            <div>
+                <div class="flex items-center gap-3">
+                    <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-3">
+                        <span class="bg-indigo-600 text-white p-2.5 rounded-xl text-lg shadow-sm">
+                            <i class="fa-solid fa-list-check"></i>
+                        </span>
+                        Tableau de Roulement
+                    </h1>
+                    <!-- Cloud Sync Indicator -->
+                    <span id="saveStatus" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                        <i class="fa-solid fa-cloud-check text-emerald-500"></i> Sauvegardé
+                    </span>
+                </div>
+                <p class="text-sm text-slate-500 mt-1">Gérez le statut de l'équipe par jour, attribuez les tags de tickets et synthétisez le bilan quotidien.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <button onclick="openPageColorModal()" class="inline-flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium px-3.5 py-2.5 rounded-xl transition border border-indigo-200/60" title="Changer la couleur de fond de la page">
+                    <i class="fa-solid fa-palette"></i> Fond de page
+                </button>
+                <button onclick="openShareModal()" class="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition shadow-sm">
+                    <i class="fa-solid fa-share-nodes"></i> Partager
+                </button>
+                <button id="addMemberBtn" onclick="addMemberPrompt()" class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition shadow-sm">
+                    <i class="fa-solid fa-user-plus"></i> Ajouter un membre
+                </button>
+                <button onclick="exportToText()" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition shadow-sm">
+                    <i class="fa-regular fa-copy"></i> Copier le bilan (Texte)
+                </button>
+                <button onclick="exportToHtmlFile()" class="inline-flex items-center gap-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition shadow-sm" title="Télécharger le fichier HTML complet avec les modifications actuelles">
+                    <i class="fa-solid fa-file-arrow-down"></i> Télécharger HTML
+                </button>
+                <button onclick="resetSizes()" class="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-medium px-3 py-2.5 rounded-xl transition" title="Réinitialiser la taille des colonnes et lignes">
+                    <i class="fa-solid fa-arrows-left-right-to-line"></i> Tailles par défaut
+                </button>
+                <button id="resetDayBtn" onclick="confirmResetForm()" class="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-medium px-4 py-2.5 rounded-xl transition">
+                    <i class="fa-solid fa-rotate-right"></i> Réinitialiser le jour
+                </button>
+            </div>
+        </div>
+
+        <!-- Read-Only Mode Banner -->
+        <div id="readOnlyBanner" class="hidden bg-amber-500 text-white p-3.5 px-5 rounded-2xl shadow-sm flex items-center justify-between text-sm font-semibold">
+            <div class="flex items-center gap-2.5">
+                <i class="fa-solid fa-eye text-base"></i>
+                <span><strong>Mode Lecture Seule :</strong> Vous consultez ce tableau sans possibilité de modification.</span>
+            </div>
+            <button onclick="switchToEditMode()" class="bg-white text-amber-900 hover:bg-amber-100 px-3.5 py-1.5 rounded-xl transition text-xs font-bold shadow-xs">
+                Basculez en mode édition
+            </button>
+        </div>
+
+        <!-- Navigation Onglets de la Semaine -->
+        <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between flex-wrap gap-2">
+            <div id="tabsContainer" class="flex items-center gap-2 overflow-x-auto py-1 max-w-full">
+                <!-- Injected dynamically -->
+            </div>
+            <button id="addTabBtn" onclick="addNewTabPrompt()" class="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3.5 py-2 rounded-xl transition shrink-0">
+                <i class="fa-solid fa-plus"></i> Nouvel onglet
+            </button>
+        </div>
+
+        <!-- Tag Palette / Legend -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 pb-3">
+                <h2 class="text-sm font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-tags text-indigo-500"></i> Banque d'étiquettes d'activité (<span id="tagCount">0</span>)
+                </h2>
+                <button id="manageTagsBtn" onclick="openManageTagsModal()" class="text-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-3.5 py-2 rounded-xl transition border border-indigo-200/60 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders"></i> Gérer / Modifier les étiquettes
+                </button>
+            </div>
+            <div id="tagsLegend" class="flex flex-wrap gap-2.5">
+                <!-- Injected via JavaScript -->
+            </div>
+        </div>
+
+        <!-- General Daily Note / Announcement Text Field -->
+        <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex items-center gap-3">
+            <div class="bg-amber-100 text-amber-800 p-2.5 rounded-xl shrink-0 flex items-center justify-center">
+                <i class="fa-solid fa-bullhorn text-base"></i>
+            </div>
+            <div class="grow">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Consignes & Note du jour (Optionnel)</label>
+                <input 
+                    type="text" 
+                    id="tabGeneralNote" 
+                    placeholder="Saisissez ici des informations ou consignes générales pour l'équipe (ex: Réunion à 14h, priorité aux accès MonSisra...)" 
+                    oninput="updateTabGeneralNote(this.value)"
+                    class="w-full text-base font-medium text-slate-800 bg-slate-50/80 hover:bg-slate-100/80 focus:bg-white border border-slate-200 focus:border-indigo-400 focus:outline-none rounded-xl px-3.5 py-2.5 transition"
+                />
+            </div>
+        </div>
+
+        <!-- Main Data Table Container -->
+        <div class="bg-white rounded-2xl shadow-sm border-2 border-slate-300 overflow-hidden flex-1 flex flex-col">
+            <div class="overflow-x-auto grow">
+                <table id="mainTable" class="w-full text-left border-collapse min-w-[950px] table-fixed">
+                    <thead>
+                        <tr class="bg-slate-200 text-slate-800 text-sm font-bold border-b-2 border-slate-300 select-none">
+                            <th id="col-qui" class="p-4 border-r-2 border-slate-300 w-1/5 resizable-th">
+                                <div class="flex items-center justify-between">
+                                    <span><i class="fa-solid fa-user me-1.5 text-slate-600"></i> QUI</span>
+                                </div>
+                                <div class="col-resizer" onmousedown="initColResize(event, 'col-qui')"></div>
+                            </th>
+                            <th id="col-action" class="p-4 border-r-2 border-slate-300 w-1/4 resizable-th">
+                                <div class="flex items-center justify-between">
+                                    <span><i class="fa-solid fa-list-check me-1.5 text-sky-600"></i> FAIT QUOI AUJOURD'HUI</span>
+                                </div>
+                                <div class="col-resizer" onmousedown="initColResize(event, 'col-action')"></div>
+                            </th>
+                            <th id="col-date" class="p-4 border-r-2 border-slate-300 w-1/5 resizable-th">
+                                <div class="flex items-center justify-between">
+                                    <span><i class="fa-regular fa-clock me-1.5 text-purple-600"></i> DATE DU DERNIER TICKET</span>
+                                </div>
+                                <div class="col-resizer" onmousedown="initColResize(event, 'col-date')"></div>
+                            </th>
+                            <th id="col-remaining" class="p-4 border-r-2 border-slate-300 w-1/6 resizable-th">
+                                <div class="flex items-center justify-between">
+                                    <span><i class="fa-solid fa-ticket me-1.5 text-amber-600"></i> TICKETS RESTANTS</span>
+                                </div>
+                                <div class="col-resizer" onmousedown="initColResize(event, 'col-remaining')"></div>
+                            </th>
+                            <th id="col-comment" class="p-4 w-1/4 resizable-th">
+                                <div class="flex items-center justify-between">
+                                    <span><i class="fa-regular fa-comment-dots me-1.5 text-emerald-600"></i> COMMENTAIRE FIN DE JOURNÉE</span>
+                                </div>
+                                <div class="col-resizer" onmousedown="initColResize(event, 'col-comment')"></div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="teamTableBody" class="divide-y-2 divide-slate-300 text-sm">
+                        <!-- Table Rows Injected Dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tag Selector Modal -->
+    <div id="tagSelectModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between border-b pb-3 border-slate-100">
+                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                    <i class="fa-solid fa-tag text-indigo-600"></i> Ajouter une étiquette d'activité
+                </h3>
+                <button onclick="closeTagModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-500">Sélectionnez une étiquette à ajouter pour ce membre :</p>
+            <div id="tagOptionsList" class="flex flex-wrap gap-2 max-h-60 overflow-y-auto p-1">
+                <!-- Injected via JavaScript -->
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex justify-end">
+                <button onclick="closeTagModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-xl text-xs transition">
+                    Annuler
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tag Management & Editing Modal -->
+    <div id="manageTagsModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl border border-slate-100 space-y-5">
+            <div class="flex items-center justify-between border-b pb-3 border-slate-100">
+                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-indigo-600"></i> Gestion & Ordre des Étiquettes
+                </h3>
+                <button onclick="closeManageTagsModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Create New Tag Form -->
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                <span class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Créer une nouvelle étiquette :</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <input type="text" id="newTagName" placeholder="Nom du tag..." class="grow text-sm p-2.5 rounded-xl border border-slate-200 bg-white font-medium focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+                    <div class="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200">
+                        <input type="color" id="newTagColor" value="#3b82f6" class="w-8 h-8 rounded-lg cursor-pointer border-0 bg-transparent" title="Choisir une couleur">
+                    </div>
+                    <button onclick="createNewTag()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shrink-0">
+                        <i class="fa-solid fa-plus"></i> Créer
+                    </button>
+                </div>
+            </div>
+
+            <!-- Existing Tags List with Reordering -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Étiquettes actuelles (Déplacez avec ⬆️ ⬇️) :</span>
+                </div>
+                <div id="manageTagsList" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    <!-- Injected via JS -->
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex justify-end">
+                <button onclick="closeManageTagsModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-xl text-xs transition">
+                    Terminé
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Member Color Modal -->
+    <div id="memberColorModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between border-b pb-3 border-slate-100">
+                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                    <i class="fa-solid fa-palette text-indigo-600"></i> Couleur du membre
+                </h3>
+                <button onclick="closeMemberColorModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-500">Sélectionnez la nuance à attribuer à ce membre :</p>
+            <div id="memberColorPalette" class="grid grid-cols-5 gap-2.5 p-1">
+                <!-- Injected dynamically -->
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex justify-end">
+                <button onclick="closeMemberColorModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-xl text-xs transition">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page Background Color Modal -->
+    <div id="pageColorModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between border-b pb-3 border-slate-100">
+                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                    <i class="fa-solid fa-palette text-indigo-600"></i> Couleur de fond de la page
+                </h3>
+                <button onclick="closePageColorModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-500">Choisissez une nuance de fond pour votre page :</p>
+            <div class="grid grid-cols-4 gap-2.5 p-1">
+                <button onclick="setPageBackground('#f8fafc')" class="h-10 rounded-xl bg-slate-50 border-2 border-slate-200 font-bold text-xs text-slate-700 shadow-2xs hover:scale-105 transition">Défaut</button>
+                <button onclick="setPageBackground('#ffffff')" class="h-10 rounded-xl bg-white border-2 border-slate-200 font-bold text-xs text-slate-700 shadow-2xs hover:scale-105 transition">Blanc</button>
+                <button onclick="setPageBackground('#f0fdf4')" class="h-10 rounded-xl bg-emerald-50 border-2 border-emerald-200 font-bold text-xs text-emerald-800 shadow-2xs hover:scale-105 transition">Menthe</button>
+                <button onclick="setPageBackground('#eff6ff')" class="h-10 rounded-xl bg-blue-50 border-2 border-blue-200 font-bold text-xs text-blue-800 shadow-2xs hover:scale-105 transition">Ciel</button>
+                <button onclick="setPageBackground('#fdf4ff')" class="h-10 rounded-xl bg-purple-50 border-2 border-purple-200 font-bold text-xs text-purple-800 shadow-2xs hover:scale-105 transition">Lilas</button>
+                <button onclick="setPageBackground('#fffbeb')" class="h-10 rounded-xl bg-amber-50 border-2 border-amber-200 font-bold text-xs text-amber-800 shadow-2xs hover:scale-105 transition">Sable</button>
+                <button onclick="setPageBackground('#fff1f2')" class="h-10 rounded-xl bg-rose-50 border-2 border-rose-200 font-bold text-xs text-rose-800 shadow-2xs hover:scale-105 transition">Rose</button>
+                <button onclick="setPageBackground('#0f172a')" class="h-10 rounded-xl bg-slate-900 border-2 border-slate-700 font-bold text-xs text-white shadow-2xs hover:scale-105 transition">Sombre</button>
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-600">Personnalisée :</span>
+                <input type="color" id="customPageColorPicker" value="#f8fafc" onchange="setPageBackground(this.value)" class="w-10 h-8 rounded-lg cursor-pointer border border-slate-200 bg-white p-0.5">
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex justify-end">
+                <button onclick="closePageColorModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-xl text-xs transition">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cell Background Color Modal -->
+    <div id="cellColorModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between border-b pb-3 border-slate-100">
+                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                    <i class="fa-solid fa-fill-drip text-indigo-600"></i> Couleur de fond de la case
+                </h3>
+                <button onclick="closeCellColorModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <p class="text-xs text-slate-500">Choisissez une teinte de fond pour cette case :</p>
+            <div class="grid grid-cols-4 gap-2.5 p-1">
+                <button onclick="setCellBackground('')" class="h-10 rounded-xl bg-slate-100 border-2 border-slate-200 font-bold text-xs text-slate-700 shadow-2xs hover:scale-105 transition">Défaut</button>
+                <button onclick="setCellBackground('#fef2f2')" class="h-10 rounded-xl bg-red-50 border-2 border-red-200 font-bold text-xs text-red-800 shadow-2xs hover:scale-105 transition">Rouge clair</button>
+                <button onclick="setCellBackground('#fffbeb')" class="h-10 rounded-xl bg-amber-50 border-2 border-amber-200 font-bold text-xs text-amber-800 shadow-2xs hover:scale-105 transition">Jaune clair</button>
+                <button onclick="setCellBackground('#f0fdf4')" class="h-10 rounded-xl bg-emerald-50 border-2 border-emerald-200 font-bold text-xs text-emerald-800 shadow-2xs hover:scale-105 transition">Vert clair</button>
+                <button onclick="setCellBackground('#eff6ff')" class="h-10 rounded-xl bg-blue-50 border-2 border-blue-200 font-bold text-xs text-blue-800 shadow-2xs hover:scale-105 transition">Bleu clair</button>
+                <button onclick="setCellBackground('#fdf4ff')" class="h-10 rounded-xl bg-purple-50 border-2 border-purple-200 font-bold text-xs text-purple-800 shadow-2xs hover:scale-105 transition">Violet clair</button>
+                <button onclick="setCellBackground('#fff1f2')" class="h-10 rounded-xl bg-rose-50 border-2 border-rose-200 font-bold text-xs text-rose-800 shadow-2xs hover:scale-105 transition">Rose clair</button>
+                <button onclick="setCellBackground('#f1f5f9')" class="h-10 rounded-xl bg-slate-100 border-2 border-slate-300 font-bold text-xs text-slate-800 shadow-2xs hover:scale-105 transition">Gris clair</button>
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-600">Personnalisée :</span>
+                <input type="color" id="customCellColorPicker" value="#ffffff" onchange="setCellBackground(this.value)" class="w-10 h-8 rounded-lg cursor-pointer border border-slate-200 bg-white p-0.5">
+            </div>
+            <div class="pt-2 border-t border-slate-100 flex justify-end">
+                <button onclick="closeCellColorModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-xl text-xs transition">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sharing Modal -->
+    <div id="shareModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-5">
+            <div class="flex items-center justify-between border-b pb-3 border-slate-100">
+                <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-share-nodes text-purple-600"></i> Partager le Tableau
+                </h3>
+                <button onclick="closeShareModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="space-y-2">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Choix des autorisations :</label>
+                <div class="grid grid-cols-2 gap-3">
+                    <div id="shareOptionEdit" onclick="setSharePermission('edit')" class="cursor-pointer border-2 border-indigo-600 bg-indigo-50/50 p-3 rounded-xl flex flex-col gap-1 transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-indigo-900"><i class="fa-solid fa-pen-to-square me-1"></i> Écriture</span>
+                            <input type="radio" name="sharePermission" value="edit" checked class="text-indigo-600 pointer-events-none">
+                        </div>
+                        <span class="text-[10px] text-slate-500 leading-tight">Modification complète autorisée</span>
+                    </div>
+                    <div id="shareOptionRead" onclick="setSharePermission('read')" class="cursor-pointer border-2 border-slate-200 bg-slate-50 p-3 rounded-xl flex flex-col gap-1 transition">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-700"><i class="fa-solid fa-eye me-1"></i> Lecture seule</span>
+                            <input type="radio" name="sharePermission" value="read" class="text-indigo-600 pointer-events-none">
+                        </div>
+                        <span class="text-[10px] text-slate-500 leading-tight">Consultation uniquement</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-1.5">
+                <label class="block text-xs font-bold text-slate-700">Lien généré :</label>
+                <div class="flex items-center gap-2">
+                    <input type="text" id="shareUrlInput" readonly class="grow text-xs p-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-slate-600 select-all focus:outline-none" />
+                    <button onclick="copyShareLink()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl transition shrink-0 flex items-center gap-1.5">
+                        <i class="fa-regular fa-copy"></i> Copier
+                    </button>
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <button onclick="sendShareEmail()" class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition">
+                    <i class="fa-regular fa-paper-plane"></i> Envoyer par e-mail
+                </button>
+                <button onclick="closeShareModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2.5 rounded-xl text-xs transition">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-100 space-y-4">
+            <h3 id="confirmTitle" class="font-bold text-slate-900 text-base">Confirmation</h3>
+            <p id="confirmMessage" class="text-xs text-slate-600 leading-relaxed"></p>
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button id="confirmCancelBtn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-xl text-xs transition">Annuler</button>
+                <button id="confirmOkBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-xl text-xs transition">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-xl transition-all opacity-0 pointer-events-none translate-y-3 z-50 flex items-center gap-2">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+        <span id="toastMsg">Action effectuée</span>
+    </div>
+
+    <script>
+        const colorThemes = {
+            orange: { bg: "bg-orange-100", text: "text-orange-900", border: "border-orange-300", accent: "#f97316" },
+            yellow: { bg: "bg-amber-100", text: "text-amber-900", border: "border-amber-300", accent: "#eab308" },
+            blue: { bg: "bg-blue-100", text: "text-blue-900", border: "border-blue-300", accent: "#3b82f6" },
+            pink: { bg: "bg-pink-100", text: "text-pink-900", border: "border-pink-300", accent: "#ec4899" },
+            indigo: { bg: "bg-indigo-100", text: "text-indigo-900", border: "border-indigo-300", accent: "#6366f1" },
+            cyan: { bg: "bg-cyan-100", text: "text-cyan-900", border: "border-cyan-300", accent: "#06b6d4" },
+            emerald: { bg: "bg-emerald-100", text: "text-emerald-900", border: "border-emerald-300", accent: "#10b981" },
+            purple: { bg: "bg-purple-100", text: "text-purple-900", border: "border-purple-300", accent: "#a855f7" },
+            rose: { bg: "bg-rose-100", text: "text-rose-900", border: "border-rose-300", accent: "#f43f5e" },
+            slate: { bg: "bg-slate-100", text: "text-slate-900", border: "border-slate-300", accent: "#64748b" }
+        };
+
+        const defaultTags = [
+            { id: 1, name: "Vacances / Off", color: "#94a3b8" },
+            { id: 2, name: "Ticket en cours et retour", color: "#38bdf8" },
+            { id: 3, name: "Ticket MonSisra - Autre", color: "#6366f1" },
+            { id: 4, name: "Ticket MonSisra - Accès au document", color: "#06b6d4" },
+            { id: 5, name: "Ticket MonSisra - Utilisation générale", color: "#2563eb" },
+            { id: 6, name: "Ticket inscription niveau 2", color: "#f472b6" },
+            { id: 7, name: "Ticket de connexion", color: "#d97706" },
+            { id: 8, name: "Ticket inscription personne morale", color: "#d946ef" },
+            { id: 9, name: "Téléconsultation", color: "#8b5cf6" },
+            { id: 10, name: "Téléexpertise", color: "#ec4899" },
+            { id: 11, name: "Ticket compte délégation", color: "#f97316" },
+            { id: 12, name: "Ticket patient Ma Santé Connectée", color: "#0891b2" },
+            { id: 13, name: "Ticket MyCLB", color: "#7c3aed" },
+            { id: 14, name: "Ticket monchussanté", color: "#10b981" },
+            { id: 15, name: "Répertoire d'enregistrement", color: "#14b8a6" },
+            { id: 16, name: "MSS", color: "#64748b" },
+            { id: 17, name: "Désinscription", color: "#ef4444" },
+            { id: 18, name: "Tri de tickets", color: "#f59e0b" },
+            { id: 19, name: "Aurore", color: "#a855f7" },
+            { id: 20, name: "RCP", color: "#0284c7" },
+            { id: 21, name: "Mes patients", color: "#059669" }
+        ];
+
+        function createDefaultTeam() {
+            return [
+                { id: 101, name: "Aminata", colorKey: "orange", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
+                { id: 102, name: "Cyrille", colorKey: "yellow", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
+                { id: 103, name: "Sarah", colorKey: "blue", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
+                { id: 104, name: "Ludivine", colorKey: "rose", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
+                { id: 105, name: "Cécilie", colorKey: "indigo", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
+                { id: 106, name: "Clémence F", colorKey: "cyan", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} },
+                { id: 107, name: "Clémence B", colorKey: "emerald", tags: [], lastTicketDate: "", remainingTickets: "", comment: "", cellBg: {} }
+            ];
+        }
+
+        // ================================================================
+        // COLLABORATIVE DATABASE CONFIGURATION (SUPABASE)
+        // Create a project, run the companion SQL file, then paste the URL
+        // and publishable key below. No service_role key is ever used here.
+        // ================================================================
+        const SUPABASE_URL = "https://xyujembbwnsuyfukjdgh.supabase.co";
+        const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_auwWX02I4McHrgOEiZRT0Q_dPXsMUVW";
+
+        // IMPORTANT : quand le fichier est ouvert directement en local (file://),
+        // le CDN Supabase peut parfois ne pas être chargé. On ne laisse pas cette
+        // absence bloquer toute l'interface : les boutons restent fonctionnels.
+        let supabaseClient = null;
+        let supabaseLoadError = null;
+        try {
+            if (window.supabase && typeof window.supabase.createClient === 'function') {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+            } else {
+                supabaseLoadError = new Error("La librairie Supabase n'est pas chargée.");
+            }
+        } catch (e) {
+            supabaseLoadError = e;
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        window.boardId = urlParams.get('board');
+        window.accessToken = urlParams.get('token');
+        window.isReadOnly = urlParams.get('mode') === 'read';
+        window.sharePermissionMode = 'edit';
+        window.currentEditingMemberId = null;
+        window.currentCellEditing = null;
+        window.realtimeChannel = null;
+        window.dbReady = false;
+
+        window.availableTags = defaultTags;
+        window.boardTabs = [
+            { id: 'lundi', name: 'Lundi', date: '', generalNote: '', teamData: createDefaultTeam() },
+            { id: 'mardi', name: 'Mardi', date: '', generalNote: '', teamData: createDefaultTeam() },
+            { id: 'mercredi', name: 'Mercredi', date: '', generalNote: '', teamData: createDefaultTeam() },
+            { id: 'jeudi', name: 'Jeudi', date: '', generalNote: '', teamData: createDefaultTeam() },
+            { id: 'vendredi', name: 'Vendredi', date: '', generalNote: '', teamData: createDefaultTeam() }
+        ];
+        window.activeTabId = 'lundi';
+        window.pageBgColor = '#f8fafc';
+
+        window.updateSaveBadge = function(status) {
+            const badge = document.getElementById('saveStatus');
+            if (!badge) return;
+            if (status === 'saving') {
+                badge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 shadow-xs";
+                badge.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-amber-500"></i> Enregistrement...`;
+            } else if (status === 'saved') {
+                badge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs";
+                badge.innerHTML = `<i class="fa-solid fa-cloud-check text-emerald-500"></i> Sauvegardé en ligne`;
+            }
+        };
+
+        function isSupabaseConfigured() {
+            return !!supabaseClient &&
+                   !SUPABASE_URL.includes('PASTE_YOUR_') &&
+                   !SUPABASE_PUBLISHABLE_KEY.includes('PASTE_YOUR_');
+        }
+
+        function buildState() {
+            return {
+                availableTags: window.availableTags,
+                boardTabs: window.boardTabs,
+                activeTabId: window.activeTabId,
+                pageBgColor: window.pageBgColor
+            };
+        }
+
+        async function createOnlineBoard() {
+            const { data, error } = await supabaseClient.rpc('create_roulement_board', { p_state: buildState() });
+            if (error) throw error;
+            window.boardId = data.board_id;
+            window.accessToken = data.edit_token;
+            window.readToken = data.read_token;
+            window.isReadOnly = false;
+            const url = new URL(window.location.href);
+            url.searchParams.set('board', window.boardId);
+            url.searchParams.set('token', window.accessToken);
+            url.searchParams.set('mode', 'edit');
+            history.replaceState({}, '', url.toString());
+            return data;
+        }
+
+        async function loadOnlineBoard() {
+            if (!isSupabaseConfigured()) return false;
+            if (!window.boardId || !window.accessToken) return false;
+            const { data, error } = await supabaseClient.rpc('load_roulement_board', {
+                p_board_id: window.boardId,
+                p_token: window.accessToken
+            });
+            if (error) throw error;
+            if (!data) return false;
+            window.readToken = data.read_token || window.readToken;
+            window.availableTags = data.availableTags || defaultTags;
+            window.boardTabs = data.boardTabs || window.boardTabs;
+            window.activeTabId = data.activeTabId || 'lundi';
+            window.pageBgColor = data.pageBgColor || '#f8fafc';
+            return true;
+        }
+
+        let saveTimer = null;
+        window.saveToStorage = function() {
+            if (window.isReadOnly || !window.dbReady || !isSupabaseConfigured() || !window.boardId || !window.accessToken) return;
+            clearTimeout(saveTimer);
+            window.updateSaveBadge('saving');
+            saveTimer = setTimeout(async () => {
+                const { error } = await supabaseClient.rpc('save_roulement_board', {
+                    p_board_id: window.boardId,
+                    p_token: window.accessToken,
+                    p_state: buildState()
+                });
+                if (error) {
+                    console.error(error);
+                    window.updateSaveBadge('error');
+                    showToast("Erreur d'enregistrement en ligne.", 'error');
+                } else {
+                    window.updateSaveBadge('saved');
+                }
+            }, 250);
+        };
+
+        async function startRealtime() {
+            if (!window.boardId || !window.accessToken || !isSupabaseConfigured()) return;
+            // Polling avoids exposing the board row directly to anonymous clients.
+            // The database is still the shared source of truth; changes appear automatically.
+            if (window.collabPollTimer) clearInterval(window.collabPollTimer);
+            window.collabPollTimer = setInterval(async () => {
+                if (!window.dbReady) return;
+                try {
+                    const { data, error } = await supabaseClient.rpc('load_roulement_board', {
+                        p_board_id: window.boardId,
+                        p_token: window.accessToken
+                    });
+                    if (error || !data || !data.state) return;
+                    const incoming = JSON.stringify(data.state);
+                    const current = JSON.stringify(buildState());
+                    if (incoming === current) return;
+                    window.availableTags = data.state.availableTags || window.availableTags;
+                    window.boardTabs = data.state.boardTabs || window.boardTabs;
+                    window.activeTabId = data.state.activeTabId || window.activeTabId;
+                    window.pageBgColor = data.state.pageBgColor || window.pageBgColor;
+                    applyPageBackground(window.pageBgColor);
+                    renderTabs(); renderLegend(); renderTable();
+                    window.updateSaveBadge('saved');
+                } catch (e) { console.warn('Synchronisation:', e); }
+            }, 3000);
+        }
+
+        async function initializeOnlineApp() {
+            try {
+                if (!isSupabaseConfigured()) {
+                    window.dbReady = false;
+                    const msg = supabaseLoadError
+                        ? "Le tableau est ouvert en local (file://) et la librairie Supabase n'a pas été chargée. Les fonctions d'interface restent disponibles ; pour le partage et la sauvegarde en ligne, ouvrez le fichier via GitHub Pages."
+                        : "Supabase n'est pas configuré dans le fichier HTML.";
+                    setTimeout(() => showToast(msg, 'error'), 600);
+                    return;
+                }
+                if (!window.boardId || !window.accessToken) {
+                    await createOnlineBoard();
+                } else {
+                    const loaded = await loadOnlineBoard();
+                    if (!loaded) throw new Error('Lien de tableau invalide ou accès refusé.');
+                }
+                window.dbReady = true;
+                await startRealtime();
+            } catch (e) {
+                console.error(e);
+                showToast("Impossible de charger le tableau en ligne : " + (e.message || e), 'error');
+            }
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            const msgEl = document.getElementById('toastMsg');
+            
+            msgEl.textContent = msg;
+            if (type === 'error') {
+                icon.className = "fa-solid fa-circle-exclamation text-rose-400";
+            } else {
+                icon.className = "fa-solid fa-circle-check text-emerald-400";
+            }
+            
+            toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-3');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-3');
+            }, 3000);
+        }
+
+        function showConfirm(title, message, onConfirm) {
+            const modal = document.getElementById('confirmModal');
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').textContent = message;
+            
+            const cancelBtn = document.getElementById('confirmCancelBtn');
+            const okBtn = document.getElementById('confirmOkBtn');
+            
+            const close = () => modal.classList.add('hidden');
+            
+            cancelBtn.onclick = close;
+            okBtn.onclick = () => {
+                close();
+                onConfirm();
+            };
+            
+            modal.classList.remove('hidden');
+        }
+
+        function getActiveTab() {
+            if (!window.boardTabs || window.boardTabs.length === 0) {
+                window.boardTabs = [{ id: 'lundi', name: 'Lundi', date: '', generalNote: '', teamData: createDefaultTeam() }];
+            }
+            return window.boardTabs.find(t => t.id === window.activeTabId) || window.boardTabs[0];
+        }
+
+        function checkReadOnlyState() {
+            if (window.isReadOnly) {
+                const banner = document.getElementById('readOnlyBanner');
+                if (banner) banner.classList.remove('hidden');
+
+                ['addMemberBtn', 'resetDayBtn', 'manageTagsBtn', 'addTabBtn'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add('hidden');
+                });
+
+                const genNoteInput = document.getElementById('tabGeneralNote');
+                if (genNoteInput) {
+                    genNoteInput.disabled = true;
+                    genNoteInput.readOnly = true;
+                }
+            }
+        }
+
+        function applyPageBackground(colorHex) {
+            window.pageBgColor = colorHex;
+            const body = document.getElementById('pageBody');
+            if (body) {
+                if (colorHex.startsWith('#') && colorHex.toLowerCase() === '#0f172a') {
+                    body.className = "h-full text-slate-100 flex flex-col min-h-screen bg-slate-900 transition-colors duration-300";
+                } else {
+                    body.style.backgroundColor = colorHex;
+                    body.className = "h-full text-slate-800 flex flex-col min-h-screen transition-colors duration-300";
+                }
+            }
+            window.saveToStorage();
+        }
+
+        function openPageColorModal() {
+            document.getElementById('pageColorModal').classList.remove('hidden');
+        }
+
+        function closePageColorModal() {
+            document.getElementById('pageColorModal').classList.add('hidden');
+        }
+
+        function setPageBackground(colorHex) {
+            applyPageBackground(colorHex);
+            closePageColorModal();
+        }
+
+        function openCellColorModal(memberId, field) {
+            window.currentCellEditing = { memberId, field };
+            document.getElementById('cellColorModal').classList.remove('hidden');
+        }
+
+        function closeCellColorModal() {
+            document.getElementById('cellColorModal').classList.add('hidden');
+            window.currentCellEditing = null;
+        }
+
+        function setCellBackground(colorHex) {
+            if (window.currentCellEditing) {
+                const { memberId, field } = window.currentCellEditing;
+                const activeTab = getActiveTab();
+                const member = activeTab.teamData.find(m => m.id === memberId);
+                if (member) {
+                    if (!member.cellBg) member.cellBg = {};
+                    if (!colorHex) {
+                        delete member.cellBg[field];
+                    } else {
+                        member.cellBg[field] = colorHex;
+                    }
+                    renderTable();
+                    window.saveToStorage();
+                }
+            }
+            closeCellColorModal();
+        }
+
+        window.getTagStyle = function(tag) {
+            const hex = tag.color || '#6366f1';
+            return {
+                style: `background-color: ${hex}1f; color: ${hex}; border-color: ${hex}40;`,
+                badgeStyle: `background-color: ${hex}; color: #ffffff;`
+            };
+        };
+
+        function formatTabNameFromDate(dateStr, defaultName) {
+            if (!dateStr) return defaultName;
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return defaultName;
+            const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+            const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+            const dayName = days[dateObj.getDay()];
+            const dd = String(dateObj.getDate()).padStart(2, '0');
+            const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+            return `${dayName} ${dd}/${mm}`;
+        }
+
+        function renderTabs() {
+            const container = document.getElementById('tabsContainer');
+            if (!container) return;
+
+            if (!window.boardTabs || window.boardTabs.length === 0) {
+                window.boardTabs = [{ id: 'lundi', name: 'Lundi', date: '', generalNote: '', teamData: createDefaultTeam() }];
+            }
+
+            container.innerHTML = window.boardTabs.map(tab => {
+                const isActive = tab.id === window.activeTabId;
+                const displayName = formatTabNameFromDate(tab.date, tab.name);
+
+                return `
+                    <div class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-bold transition shrink-0 cursor-pointer ${
+                        isActive 
+                            ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-300' 
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }" onclick="switchTab('${tab.id}')">
+                        <label class="relative cursor-pointer p-0.5 ${isActive ? 'text-indigo-200 hover:text-white' : 'text-slate-400 hover:text-slate-600'} transition" title="Sélectionner la date" onclick="event.stopPropagation();">
+                            <i class="fa-regular fa-calendar-days text-xs"></i>
+                            ${!window.isReadOnly ? `<input type="date" value="${tab.date || ''}" onchange="changeTabDate('${tab.id}', this.value)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />` : ''}
+                        </label>
+                        <span>${displayName}</span>
+                        ${!window.isReadOnly ? `
+                        <div class="flex items-center gap-1 ml-1 border-l ${isActive ? 'border-indigo-400' : 'border-slate-300'} pl-1.5">
+                            <button onclick="event.stopPropagation(); duplicateTab('${tab.id}')" class="p-0.5 hover:text-sky-300 transition" title="Dupliquer cet onglet">
+                                <i class="fa-regular fa-copy text-xs"></i>
+                            </button>
+                            ${window.boardTabs.length > 1 ? `
+                                <button onclick="event.stopPropagation(); deleteTabPrompt('${tab.id}')" class="p-0.5 hover:text-rose-300 transition" title="Supprimer cet onglet">
+                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            const activeTab = getActiveTab();
+            const genNoteInput = document.getElementById('tabGeneralNote');
+            if (genNoteInput && activeTab) {
+                genNoteInput.value = activeTab.generalNote || '';
+            }
+        }
+
+        function updateTabGeneralNote(value) {
+            const activeTab = getActiveTab();
+            if (activeTab) {
+                activeTab.generalNote = value;
+                window.saveToStorage();
+            }
+        }
+
+        function switchTab(tabId) {
+            window.activeTabId = tabId;
+            renderTabs();
+            renderTable();
+            window.saveToStorage();
+        }
+
+        function changeTabDate(tabId, dateVal) {
+            const tab = window.boardTabs.find(t => t.id === tabId);
+            if (tab) {
+                tab.date = dateVal;
+                renderTabs();
+                window.saveToStorage();
+            }
+        }
+
+        function addNewTabPrompt() {
+            const newId = 'tab_' + Date.now();
+            const newName = 'Nouvel Onglet';
+            window.boardTabs.push({ id: newId, name: newName, date: '', generalNote: '', teamData: createDefaultTeam() });
+            switchTab(newId);
+            showToast("Nouvel onglet ajouté !");
+        }
+
+        function duplicateTab(tabId) {
+            const srcTab = window.boardTabs.find(t => t.id === tabId);
+            if (!srcTab) return;
+            const newId = 'tab_' + Date.now();
+            const newTab = {
+                id: newId,
+                name: `${srcTab.name} (copie)`,
+                date: srcTab.date,
+                generalNote: srcTab.generalNote || '',
+                teamData: JSON.parse(JSON.stringify(srcTab.teamData))
+            };
+            window.boardTabs.push(newTab);
+            switchTab(newId);
+            showToast("Onglet dupliqué !");
+        }
+
+        function deleteTabPrompt(tabId) {
+            showConfirm("Supprimer l'onglet", "Voulez-vous vraiment supprimer cet onglet ?", () => {
+                window.boardTabs = window.boardTabs.filter(t => t.id !== tabId);
+                if (window.activeTabId === tabId) {
+                    window.activeTabId = window.boardTabs[0].id;
+                }
+                renderTabs();
+                renderTable();
+                window.saveToStorage();
+                showToast("Onglet supprimé.");
+            });
+        }
+
+        function renderLegend() {
+            const container = document.getElementById('tagsLegend');
+            const countEl = document.getElementById('tagCount');
+            if (!container) return;
+
+            if (countEl) countEl.textContent = window.availableTags.length;
+
+            container.innerHTML = window.availableTags.map(tag => {
+                const ts = window.getTagStyle(tag);
+                return `
+                    <span style="${ts.style}" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border shadow-2xs">
+                        <span style="${ts.badgeStyle}" class="w-3 h-3 rounded-full"></span>
+                        ${tag.name}
+                    </span>
+                `;
+            }).join('');
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('teamTableBody');
+            const activeTab = getActiveTab();
+            if (!tbody || !activeTab) return;
+
+            const readOnlyAttr = window.isReadOnly ? 'disabled readonly' : '';
+
+            tbody.innerHTML = activeTab.teamData.map((rowData) => {
+                const mTheme = colorThemes[rowData.colorKey] || colorThemes.indigo;
+                const rowHeightStyle = rowData.rowHeight ? `style="height: ${rowData.rowHeight}px;"` : '';
+                const cb = rowData.cellBg || {};
+
+                const styleQui = cb.qui ? `style="background-color: ${cb.qui};"` : '';
+                const styleAction = cb.action ? `style="background-color: ${cb.action};"` : '';
+                const styleDate = cb.date ? `style="background-color: ${cb.date};"` : '';
+                const styleRemaining = cb.remaining ? `style="background-color: ${cb.remaining};"` : '';
+                const styleComment = cb.comment ? `style="background-color: ${cb.comment};"` : '';
+
+                return `
+                    <tr ${rowHeightStyle} class="resizable-tr hover:bg-slate-50/80 transition relative">
+                        <!-- Qui -->
+                        <td ${styleQui} class="p-3 md:p-4 border-r-2 border-slate-300 font-semibold text-slate-900 relative group">
+                            <div class="flex items-center justify-between gap-2 h-full">
+                                <div class="flex items-center gap-2 grow">
+                                    ${!window.isReadOnly ? `
+                                    <button 
+                                        onclick="openMemberColorModal('${rowData.id}')" 
+                                        class="w-8 h-8 shrink-0 rounded-xl ${mTheme.bg} ${mTheme.border} ${mTheme.text} border-2 flex items-center justify-center hover:scale-105 transition shadow-2xs"
+                                        title="Changer la couleur de ${rowData.name}"
+                                    >
+                                        <i class="fa-solid fa-palette text-xs"></i>
+                                    </button>
+                                    ` : `<span class="w-3.5 h-3.5 rounded-full ${mTheme.bg} ${mTheme.border} border shrink-0"></span>`}
+                                    <input 
+                                        type="text" 
+                                        value="${rowData.name}"
+                                        ${readOnlyAttr}
+                                        onchange="updateField(${rowData.id}, 'name', this.value)"
+                                        class="w-full font-bold text-base ${mTheme.text} bg-transparent ${!window.isReadOnly ? 'hover:bg-white/80 focus:bg-white' : ''} rounded-lg px-2.5 py-1.5 border border-transparent focus:border-indigo-300 focus:outline-none transition"
+                                        title="Prénom du membre"
+                                    />
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    ${!window.isReadOnly ? `
+                                    <button onclick="openCellColorModal(${rowData.id}, 'qui')" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition p-1" title="Couleur de fond">
+                                        <i class="fa-solid fa-fill-drip text-xs"></i>
+                                    </button>
+                                    <button onclick="removeMember(${rowData.id})" class="text-slate-300 hover:text-rose-500 transition p-1 shrink-0" title="Supprimer ce membre">
+                                        <i class="fa-regular fa-trash-can text-xs"></i>
+                                    </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            ${!window.isReadOnly ? `<div class="row-resizer" onmousedown="initRowResize(event, this, ${rowData.id})"></div>` : ''}
+                        </td>
+
+                        <!-- Fait quoi aujourd'hui (Tags) -->
+                        <td ${styleAction} class="p-3 md:p-4 border-r-2 border-slate-300 relative group">
+                            <div class="flex flex-wrap items-center gap-2 min-h-[46px]">
+                                ${rowData.tags.map(tagId => {
+                                    const tag = window.availableTags.find(t => t.id === tagId);
+                                    if (!tag) return '';
+                                    const ts = window.getTagStyle(tag);
+                                    return `
+                                        <span style="${ts.style}" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border shadow-2xs">
+                                            ${tag.name}
+                                            ${!window.isReadOnly ? `
+                                            <button onclick="removeTag(${rowData.id}, ${tag.id})" class="ml-1 hover:opacity-70 transition">
+                                                <i class="fa-solid fa-xmark text-xs"></i>
+                                            </button>
+                                            ` : ''}
+                                        </span>
+                                    `;
+                                }).join('')}
+                                ${!window.isReadOnly ? `
+                                <button onclick="openTagModal(${rowData.id})" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 border border-slate-200 border-dashed transition">
+                                    <i class="fa-solid fa-plus text-xs"></i> Ajouter tag
+                                </button>
+                                ` : ''}
+                            </div>
+                            ${!window.isReadOnly ? `
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex items-center gap-1">
+                                <button onclick="openCellColorModal(${rowData.id}, 'action')" class="text-slate-400 hover:text-indigo-600 transition p-1 bg-white/80 rounded-md shadow-xs" title="Couleur de fond">
+                                    <i class="fa-solid fa-fill-drip text-xs"></i>
+                                </button>
+                            </div>
+                            <div class="row-resizer" onmousedown="initRowResize(event, this, ${rowData.id})"></div>` : ''}
+                        </td>
+
+                        <!-- Date du dernier ticket -->
+                        <td ${styleDate} class="p-3 md:p-4 border-r-2 border-slate-300 relative group">
+                            <input 
+                                type="text" 
+                                placeholder="${window.isReadOnly ? 'Aucune date' : 'ex: 24/08 - Accès doc'}" 
+                                value="${rowData.lastTicketDate || ''}"
+                                ${readOnlyAttr}
+                                oninput="updateField(${rowData.id}, 'lastTicketDate', this.value)"
+                                class="w-full text-base p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-400 focus:outline-none bg-white text-slate-800"
+                            />
+                            ${!window.isReadOnly ? `
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100">
+                                <button onclick="openCellColorModal(${rowData.id}, 'date')" class="text-slate-400 hover:text-indigo-600 transition p-1 bg-white/80 rounded-md shadow-xs" title="Couleur de fond">
+                                    <i class="fa-solid fa-fill-drip text-xs"></i>
+                                </button>
+                            </div>
+                            <div class="row-resizer" onmousedown="initRowResize(event, this, ${rowData.id})"></div>` : ''}
+                        </td>
+
+                        <!-- Nb tickets restants -->
+                        <td ${styleRemaining} class="p-3 md:p-4 border-r-2 border-slate-300 relative group">
+                            <input 
+                                type="text" 
+                                placeholder="${window.isReadOnly ? '0' : 'ex: 5 tickets (2 urgents)'}"
+                                value="${rowData.remainingTickets || ''}"
+                                ${readOnlyAttr}
+                                oninput="updateField(${rowData.id}, 'remainingTickets', this.value)"
+                                class="w-full text-base p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-400 focus:outline-none bg-white text-slate-800"
+                            />
+                            ${!window.isReadOnly ? `
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100">
+                                <button onclick="openCellColorModal(${rowData.id}, 'remaining')" class="text-slate-400 hover:text-indigo-600 transition p-1 bg-white/80 rounded-md shadow-xs" title="Couleur de fond">
+                                    <i class="fa-solid fa-fill-drip text-xs"></i>
+                                </button>
+                            </div>
+                            <div class="row-resizer" onmousedown="initRowResize(event, this, ${rowData.id})"></div>` : ''}
+                        </td>
+
+                        <!-- Commentaire fin de journée -->
+                        <td ${styleComment} class="p-3 md:p-4 relative group">
+                            <textarea 
+                                rows="2" 
+                                placeholder="${window.isReadOnly ? '' : 'Remarques, points de blocage ou précisions...'}"
+                                ${readOnlyAttr}
+                                oninput="updateField(${rowData.id}, 'comment', this.value)"
+                                class="w-full h-full text-base p-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-400 focus:outline-none bg-white resize-none text-slate-800"
+                            >${rowData.comment || ''}</textarea>
+                            ${!window.isReadOnly ? `
+                            <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100">
+                                <button onclick="openCellColorModal(${rowData.id}, 'comment')" class="text-slate-400 hover:text-indigo-600 transition p-1 bg-white/80 rounded-md shadow-xs" title="Couleur de fond">
+                                    <i class="fa-solid fa-fill-drip text-xs"></i>
+                                </button>
+                            </div>
+                            <div class="row-resizer" onmousedown="initRowResize(event, this, ${rowData.id})"></div>` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateField(memberId, field, value) {
+            const activeTab = getActiveTab();
+            const member = activeTab.teamData.find(m => m.id === memberId);
+            if (member) {
+                member[field] = value;
+                window.saveToStorage();
+            }
+        }
+
+        function addMemberPrompt() {
+            const name = prompt("Prénom du nouveau membre :");
+            if (name && name.trim()) {
+                const newMember = {
+                    id: Date.now(),
+                    name: name.trim(),
+                    colorKey: "slate",
+                    tags: [],
+                    lastTicketDate: "",
+                    remainingTickets: "",
+                    comment: "",
+                    cellBg: {}
+                };
+                getActiveTab().teamData.push(newMember);
+                renderTable();
+                window.saveToStorage();
+                showToast("Membre ajouté à l'équipe !");
+            }
+        }
+
+        function removeMember(memberId) {
+            showConfirm("Retirer du membre", "Voulez-vous vraiment retirer ce membre de l'équipe pour ce jour ?", () => {
+                const activeTab = getActiveTab();
+                activeTab.teamData = activeTab.teamData.filter(m => m.id !== memberId);
+                renderTable();
+                window.saveToStorage();
+                showToast("Membre retiré.");
+            });
+        }
+
+        function openMemberColorModal(memberId) {
+            window.currentEditingMemberId = memberId;
+            const container = document.getElementById('memberColorPalette');
+            if (!container) return;
+
+            container.innerHTML = Object.keys(colorThemes).map(key => {
+                const theme = colorThemes[key];
+                return `
+                    <button 
+                        onclick="setMemberColor('${key}')" 
+                        class="h-10 rounded-xl ${theme.bg} ${theme.border} border-2 flex items-center justify-center hover:scale-105 transition shadow-2xs"
+                        title="${key}"
+                    >
+                        <span class="w-3.5 h-3.5 rounded-full" style="background-color: ${theme.accent};"></span>
+                    </button>
+                `;
+            }).join('');
+
+            document.getElementById('memberColorModal').classList.remove('hidden');
+        }
+
+        function closeMemberColorModal() {
+            document.getElementById('memberColorModal').classList.add('hidden');
+        }
+
+        function setMemberColor(colorKey) {
+            if (window.currentEditingMemberId) {
+                const activeTab = getActiveTab();
+                const member = activeTab.teamData.find(m => m.id === window.currentEditingMemberId);
+                if (member) {
+                    member.colorKey = colorKey;
+                    renderTable();
+                    window.saveToStorage();
+                }
+            }
+            closeMemberColorModal();
+        }
+
+        function openTagModal(memberId) {
+            window.currentEditingMemberId = memberId;
+            const container = document.getElementById('tagOptionsList');
+            const activeTab = getActiveTab();
+            const member = activeTab.teamData.find(m => m.id === memberId);
+
+            if (!container || !member) return;
+
+            const unusedTags = window.availableTags.filter(t => !member.tags.includes(t.id));
+
+            if (unusedTags.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-400 italic p-2">Toutes les étiquettes sont déjà attribuées.</p>`;
+            } else {
+                container.innerHTML = unusedTags.map(tag => {
+                    const ts = window.getTagStyle(tag);
+                    return `
+                        <button 
+                            onclick="assignTag(${tag.id})" 
+                            style="${ts.style}" 
+                            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border hover:scale-105 transition shadow-2xs"
+                        >
+                            <span style="${ts.badgeStyle}" class="w-2.5 h-2.5 rounded-full"></span>
+                            ${tag.name}
+                        </button>
+                    `;
+                }).join('');
+            }
+
+            document.getElementById('tagSelectModal').classList.remove('hidden');
+        }
+
+        function closeTagModal() {
+            document.getElementById('tagSelectModal').classList.add('hidden');
+        }
+
+        function assignTag(tagId) {
+            const activeTab = getActiveTab();
+            const member = activeTab.teamData.find(m => m.id === window.currentEditingMemberId);
+            if (member && !member.tags.includes(tagId)) {
+                member.tags.push(tagId);
+                renderTable();
+                window.saveToStorage();
+            }
+            closeTagModal();
+        }
+
+        function removeTag(memberId, tagId) {
+            const activeTab = getActiveTab();
+            const member = activeTab.teamData.find(m => m.id === memberId);
+            if (member) {
+                member.tags = member.tags.filter(id => id !== tagId);
+                renderTable();
+                window.saveToStorage();
+            }
+        }
+
+        function openManageTagsModal() {
+            renderManageTagsList();
+            document.getElementById('manageTagsModal').classList.remove('hidden');
+        }
+
+        function closeManageTagsModal() {
+            document.getElementById('manageTagsModal').classList.add('hidden');
+            renderLegend();
+            renderTable();
+        }
+
+        function renderManageTagsList() {
+            const container = document.getElementById('manageTagsList');
+            if (!container) return;
+
+            container.innerHTML = window.availableTags.map((tag, idx) => {
+                const isFirst = idx === 0;
+                const isLast = idx === window.availableTags.length - 1;
+
+                return `
+                    <div class="flex items-center justify-between gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <div class="flex items-center gap-2 grow">
+                            <div class="flex flex-col gap-0.5 shrink-0">
+                                <button 
+                                    onclick="moveTag(${idx}, -1)" 
+                                    ${isFirst ? 'disabled class="text-slate-300 cursor-not-allowed"' : 'class="text-slate-500 hover:text-indigo-600 transition"'}
+                                    title="Monter l'étiquette"
+                                >
+                                    <i class="fa-solid fa-chevron-up text-[10px]"></i>
+                                </button>
+                                <button 
+                                    onclick="moveTag(${idx}, 1)" 
+                                    ${isLast ? 'disabled class="text-slate-300 cursor-not-allowed"' : 'class="text-slate-500 hover:text-indigo-600 transition"'}
+                                    title="Descendre l'étiquette"
+                                >
+                                    <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                                </button>
+                            </div>
+
+                            <input 
+                                type="color" 
+                                value="${tag.color}" 
+                                onchange="updateTagColor(${tag.id}, this.value)" 
+                                class="w-7 h-7 rounded-lg cursor-pointer border-0 bg-transparent shrink-0" 
+                            />
+                            <input 
+                                type="text" 
+                                value="${tag.name}" 
+                                onchange="updateTagName(${tag.id}, this.value)" 
+                                class="grow text-sm font-semibold text-slate-800 bg-white p-1.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-300" 
+                            />
+                        </div>
+                        <button onclick="deleteTag(${tag.id})" class="text-slate-400 hover:text-rose-500 transition p-1.5" title="Supprimer ce tag">
+                            <i class="fa-regular fa-trash-can text-sm"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function moveTag(idx, direction) {
+            const targetIdx = idx + direction;
+            if (targetIdx < 0 || targetIdx >= window.availableTags.length) return;
+            
+            const temp = window.availableTags[idx];
+            window.availableTags[idx] = window.availableTags[targetIdx];
+            window.availableTags[targetIdx] = temp;
+            
+            renderManageTagsList();
+            renderLegend();
+            renderTable();
+            window.saveToStorage();
+        }
+
+        function createNewTag() {
+            const nameInput = document.getElementById('newTagName');
+            const colorInput = document.getElementById('newTagColor');
+            
+            const name = nameInput.value.trim();
+            const color = colorInput.value;
+
+            if (!name) {
+                showToast("Veuillez saisir un nom pour l'étiquette", "error");
+                return;
+            }
+
+            const newTag = {
+                id: Date.now(),
+                name: name,
+                color: color
+            };
+
+            window.availableTags.push(newTag);
+            nameInput.value = '';
+            renderManageTagsList();
+            renderLegend();
+            window.saveToStorage();
+            showToast("Étiquette créée !");
+        }
+
+        function updateTagName(tagId, newName) {
+            const tag = window.availableTags.find(t => t.id === tagId);
+            if (tag && newName.trim()) {
+                tag.name = newName.trim();
+                window.saveToStorage();
+            }
+        }
+
+        function updateTagColor(tagId, newColor) {
+            const tag = window.availableTags.find(t => t.id === tagId);
+            if (tag) {
+                tag.color = newColor;
+                window.saveToStorage();
+            }
+        }
+
+        function deleteTag(tagId) {
+            window.availableTags = window.availableTags.filter(t => t.id !== tagId);
+            window.boardTabs.forEach(tab => {
+                tab.teamData.forEach(member => {
+                    member.tags = member.tags.filter(id => id !== tagId);
+                });
+            });
+            renderManageTagsList();
+            renderLegend();
+            renderTable();
+            window.saveToStorage();
+            showToast("Étiquette supprimée.");
+        }
+
+        let currentResizingCol = null;
+        let startX = 0;
+        let startWidth = 0;
+
+        function initColResize(e, colId) {
+            e.stopPropagation();
+            currentResizingCol = document.getElementById(colId);
+            startX = e.clientX;
+            startWidth = currentResizingCol.offsetWidth;
+
+            document.addEventListener('mousemove', handleColMouseMove);
+            document.addEventListener('mouseup', handleColMouseUp);
+        }
+
+        function handleColMouseMove(e) {
+            if (!currentResizingCol) return;
+            const diff = e.clientX - startX;
+            const newWidth = Math.max(90, startWidth + diff);
+            currentResizingCol.style.width = newWidth + 'px';
+        }
+
+        function handleColMouseUp() {
+            document.removeEventListener('mousemove', handleColMouseMove);
+            document.removeEventListener('mouseup', handleColMouseUp);
+            currentResizingCol = null;
+        }
+
+        let currentResizingRow = null;
+        let startY = 0;
+        let startRowHeight = 0;
+        let currentMemberId = null;
+
+        function initRowResize(e, handleEl, memberId) {
+            e.stopPropagation();
+            currentResizingRow = handleEl.closest('tr');
+            startY = e.clientY;
+            startRowHeight = currentResizingRow.offsetHeight;
+            currentMemberId = memberId;
+
+            document.addEventListener('mousemove', handleRowMouseMove);
+            document.addEventListener('mouseup', handleRowMouseUp);
+        }
+
+        function handleRowMouseMove(e) {
+            if (!currentResizingRow) return;
+            const diff = e.clientY - startY;
+            const newHeight = Math.max(50, startRowHeight + diff);
+            currentResizingRow.style.height = newHeight + 'px';
+        }
+
+        function handleRowMouseUp() {
+            if (currentResizingRow && currentMemberId) {
+                const activeTab = getActiveTab();
+                const member = activeTab.teamData.find(m => m.id === currentMemberId);
+                if (member) {
+                    member.rowHeight = currentResizingRow.offsetHeight;
+                    window.saveToStorage();
+                }
+            }
+            document.removeEventListener('mousemove', handleRowMouseMove);
+            document.removeEventListener('mouseup', handleRowMouseUp);
+            currentResizingRow = null;
+            currentMemberId = null;
+        }
+
+        function resetSizes() {
+            const cols = ['col-qui', 'col-action', 'col-date', 'col-remaining', 'col-comment'];
+            cols.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.width = '';
+            });
+
+            const activeTab = getActiveTab();
+            activeTab.teamData.forEach(m => delete m.rowHeight);
+            renderTable();
+            window.saveToStorage();
+            showToast("Tailles des lignes et colonnes réinitialisées.");
+        }
+
+        function openShareModal() {
+            setSharePermission('edit');
+            document.getElementById('shareModal').classList.remove('hidden');
+        }
+
+        function closeShareModal() {
+            document.getElementById('shareModal').classList.add('hidden');
+        }
+
+        function setSharePermission(mode) {
+            window.sharePermissionMode = mode;
+            const editBox = document.getElementById('shareOptionEdit');
+            const readBox = document.getElementById('shareOptionRead');
+
+            if (mode === 'edit') {
+                editBox.className = 'cursor-pointer border-2 border-indigo-600 bg-indigo-50/50 p-3 rounded-xl flex flex-col gap-1 transition';
+                readBox.className = 'cursor-pointer border-2 border-slate-200 bg-slate-50 p-3 rounded-xl flex flex-col gap-1 transition';
+            } else {
+                readBox.className = 'cursor-pointer border-2 border-indigo-600 bg-indigo-50/50 p-3 rounded-xl flex flex-col gap-1 transition';
+                editBox.className = 'cursor-pointer border-2 border-slate-200 bg-slate-50 p-3 rounded-xl flex flex-col gap-1 transition';
+            }
+            generateShareUrl();
+        }
+
+        function generateShareUrl() {
+            const url = new URL(window.location.href);
+            url.searchParams.set('board', window.boardId || '');
+            // Edit links use the edit token. Read links use a separate read token stored in the board.
+            if (window.sharePermissionMode === 'edit') {
+                url.searchParams.set('token', window.accessToken || '');
+            } else {
+                url.searchParams.set('token', window.readToken || '');
+            }
+            url.searchParams.set('mode', window.sharePermissionMode);
+            document.getElementById('shareUrlInput').value = url.toString();
+        }
+
+        function copyShareLink() {
+            const input = document.getElementById('shareUrlInput');
+            input.select();
+            document.execCommand('copy');
+            showToast("Lien de partage copié !");
+        }
+
+        function sendShareEmail() {
+            const url = document.getElementById('shareUrlInput').value;
+            const modeLabel = window.sharePermissionMode === 'read' ? 'Lecture seule' : 'Écriture / Édition';
+            const subject = encodeURIComponent("Tableau de Roulement - Lien d'accès");
+            const body = encodeURIComponent(`Bonjour,\n\nVoici le lien d'accès au Tableau de Roulement (${modeLabel}) :\n${url}\n\nBonne journée !`);
+            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+        }
+
+        function switchToEditMode() {
+            const url = new URL(window.location.href);
+            url.searchParams.set('mode', 'edit');
+            window.location.href = url.toString();
+        }
+
+        function exportToText() {
+            const activeTab = getActiveTab();
+            const tabTitle = formatTabNameFromDate(activeTab.date, activeTab.name);
+            let text = `📋 **TABLEAU DE ROULEMENT - ${tabTitle.toUpperCase()}**\n`;
+
+            if (activeTab.generalNote && activeTab.generalNote.trim()) {
+                text += `📢 Consignes du jour : ${activeTab.generalNote.trim()}\n`;
+            }
+            text += `\n`;
+
+            activeTab.teamData.forEach(member => {
+                const tagsNames = member.tags
+                    .map(tid => window.availableTags.find(t => t.id === tid)?.name)
+                    .filter(Boolean)
+                    .join(', ') || 'Aucun tag';
+
+                text += `👤 **${member.name}**\n`;
+                text += `  • Activité : ${tagsNames}\n`;
+                text += `  • Dernier ticket : ${member.lastTicketDate || 'N/A'}\n`;
+                text += `  • Tickets restants : ${member.remainingTickets || '0'}\n`;
+                if (member.comment) {
+                    text += `  • Remarque : ${member.comment}\n`;
+                }
+                text += `------------------------------------\n`;
+            });
+
+            const dummy = document.createElement('textarea');
+            document.body.appendChild(dummy);
+            dummy.value = text;
+            dummy.select();
+            document.execCommand('copy');
+            document.body.removeChild(dummy);
+
+            showToast("Bilan copié dans le presse-papier !");
+        }
+
+        function exportToHtmlFile() {
+            window.saveToStorage();
+
+            let fullHtml = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+
+            const currentTagsJson = JSON.stringify(window.availableTags);
+            const currentTabsJson = JSON.stringify(window.boardTabs);
+            const currentActiveTab = JSON.stringify(window.activeTabId);
+            const currentPageBg = JSON.stringify(window.pageBgColor);
+
+            fullHtml = fullHtml.replace(
+                /window\.availableTags = savedTags;[\s\S]*?};/,
+                `window.availableTags = ${currentTagsJson};`
+            );
+            fullHtml = fullHtml.replace(
+                /window\.boardTabs = JSON\.parse\(localStorage\.getItem\('roulement_tabs'\)\) \|\| \[[\s\S]*?\];/,
+                `window.boardTabs = ${currentTabsJson};`
+            );
+            fullHtml = fullHtml.replace(
+                /window\.activeTabId = localStorage\.getItem\('roulement_active_tab'\) \|\| 'lundi';/,
+                `window.activeTabId = ${currentActiveTab};`
+            );
+            fullHtml = fullHtml.replace(
+                /window\.pageBgColor = localStorage\.getItem\('roulement_page_bg'\) \|\| '#f8fafc';/,
+                `window.pageBgColor = ${currentPageBg};`
+            );
+
+            const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+
+            const activeTab = getActiveTab();
+            const dateStr = activeTab && activeTab.date ? activeTab.date : new Date().toISOString().slice(0, 10);
+
+            link.href = url;
+            link.download = `tableau_de_roulement_${dateStr}.html`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showToast("Fichier HTML téléchargé avec succès !");
+        }
+
+        function confirmResetForm() {
+            showConfirm("Réinitialiser le jour", "Voulez-vous réinitialiser toutes les données saisies pour cet onglet ?", () => {
+                const activeTab = getActiveTab();
+                activeTab.teamData = createDefaultTeam();
+                activeTab.generalNote = '';
+                renderTabs();
+                renderTable();
+                window.saveToStorage();
+                showToast("Journée réinitialisée.");
+            });
+        }
+
+        window.onload = async function() {
+            await initializeOnlineApp();
+            checkReadOnlyState();
+            applyPageBackground(window.pageBgColor);
+            renderTabs();
+            renderLegend();
+            renderTable();
+        };
+    </script>
+</body>
+</html>
